@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Pratini Manager</title>
+  <style>
+    body{font-family:Arial;margin:0;background:#111;color:#fff}
+    header{background:#f5c400;color:#111;padding:20px;text-align:center}
+    main{padding:20px;max-width:1000px;margin:auto}
+    .card{background:#1f1f1f;padding:20px;border-radius:12px;margin-bottom:15px}
+    input,button{padding:14px;font-size:18px;border-radius:8px;border:none;margin:5px 0;width:100%}
+    button{background:#f5c400;font-weight:bold;cursor:pointer}
+    .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:15px}
+    .status{font-size:28px;font-weight:bold}
+    .ok{color:#00d26a}
+    .pendente{color:#f5c400}
+    .danger{background:#8b0000}
+  </style>
+</head>
+<body>
+
+<header>
+  <h1>PRATINI MANAGER</h1>
+  <p>Sistema de Entrega de Kits</p>
+</header>
+
+<main>
+  <div class="card">
+    <h2>Importar Planilha CSV</h2>
+    <input type="file" id="csvFile" accept=".csv">
+    <button onclick="importarCSV()">Importar Atletas</button>
+  </div>
+
+  <div class="grid">
+    <div class="card"><h3>Total</h3><div id="total" class="status">0</div></div>
+    <div class="card"><h3>Entregues</h3><div id="entregues" class="status ok">0</div></div>
+    <div class="card"><h3>Pendentes</h3><div id="pendentes" class="status pendente">0</div></div>
+  </div>
+
+  <div class="card">
+    <h2>Busca do Atleta</h2>
+    <input type="text" id="busca" placeholder="Digite nome, CPF ou número" oninput="buscarAtleta()">
+    <div id="resultado"></div>
+  </div>
+</main>
+
+<script>
+let atletas = JSON.parse(localStorage.getItem("atletas")) || [];
+
+function salvar(){
+  localStorage.setItem("atletas", JSON.stringify(atletas));
+  atualizarDashboard();
+}
+
+function atualizarDashboard(){
+  document.getElementById("total").innerText = atletas.length;
+  document.getElementById("entregues").innerText = atletas.filter(a => a.entregue).length;
+  document.getElementById("pendentes").innerText = atletas.filter(a => !a.entregue).length;
+}
+
+function importarCSV(){
+  const file = document.getElementById("csvFile").files[0];
+  if(!file){ alert("Selecione uma planilha CSV"); return; }
+
+  const reader = new FileReader();
+  reader.onload = function(e){
+    const linhas = e.target.result.split(/\r?\n/).filter(l => l.trim() !== "");
+    const cabecalho = linhas[0].split(";").map(h => h.trim().toLowerCase());
+
+    atletas = linhas.slice(1).map((linha, index) => {
+      const col = linha.split(";");
+      return {
+        id: index + 1,
+        nome: col[cabecalho.findIndex(h => h.includes("nome"))] || "",
+        cpf: col[cabecalho.findIndex(h => h.includes("cpf"))] || "",
+        modalidade: col[cabecalho.findIndex(h => h.includes("modalidade"))] || "",
+        camiseta: col[cabecalho.findIndex(h => h.includes("camiseta") || h.includes("tamanho"))] || "",
+        equipe: col[cabecalho.findIndex(h => h.includes("equipe") || h.includes("assessoria"))] || "",
+        numero: "",
+        entregue: false,
+        entregueEm: "",
+        retiradoPor: ""
+      };
+    });
+
+    salvar();
+    alert("Planilha importada com sucesso!");
+  };
+  reader.readAsText(file, "UTF-8");
+}
+
+function buscarAtleta(){
+  const termo = document.getElementById("busca").value.toLowerCase();
+  const div = document.getElementById("resultado");
+  div.innerHTML = "";
+
+  if(termo.length < 2) return;
+
+  const encontrados = atletas.filter(a =>
+    a.nome.toLowerCase().includes(termo) ||
+    a.cpf.includes(termo)
+  ).slice(0, 10);
+
+  encontrados.forEach(a => {
+    div.innerHTML += `
+      <div class="card">
+        <h2>${a.nome}</h2>
+        <p><b>CPF:</b> ${a.cpf}</p>
+        <p><b>Modalidade:</b> ${a.modalidade}</p>
+        <p><b>Camiseta:</b> ${a.camiseta}</p>
+        <p><b>Equipe:</b> ${a.equipe}</p>
+        <p><b>Status:</b> ${a.entregue ? "<span class='ok'>ENTREGUE</span>" : "<span class='pendente'>PENDENTE</span>"}</p>
+        ${a.entregue 
+          ? `<button class="danger">Já retirado em ${a.entregueEm}<br>Por: ${a.retiradoPor}</button>`
+          : `<input id="retirado-${a.id}" placeholder="Nome de quem retirou">
+             <button onclick="entregar(${a.id})">ENTREGAR KIT</button>`
+        }
+      </div>
+    `;
+  });
+}
+
+function entregar(id){
+  const atleta = atletas.find(a => a.id === id);
+  const retirado = document.getElementById("retirado-" + id).value || "Próprio atleta";
+
+  atleta.entregue = true;
+  atleta.entregueEm = new Date().toLocaleString("pt-BR");
+  atleta.retiradoPor = retirado;
+
+  salvar();
+  buscarAtleta();
+}
+
+atualizarDashboard();
+</script>
+
+</body>
+</html>
